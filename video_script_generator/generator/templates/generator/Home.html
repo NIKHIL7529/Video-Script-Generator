@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Video Script Generator</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="bg-gray-100 p-4 sm:p-6 md:p-8 lg:p-10">
+    <div class="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-lg">
+      <h1 class="text-2xl font-semibold mb-6 text-center sm:text-left">
+        Generate Your AI Video Script
+      </h1>
+      <form id="scriptForm" method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="mb-4">
+          <label for="prompt" class="block text-sm font-medium text-gray-700"
+            >Enter Prompt:</label
+          >
+          <textarea
+            id="prompt"
+            name="prompt"
+            rows="4"
+            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter your script prompt..."
+          ></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label
+            for="external_link"
+            class="block text-sm font-medium text-gray-700"
+            >Enter External Link (optional):</label
+          >
+          <input
+            type="url"
+            id="external_link"
+            name="external_link"
+            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Enter a URL to fetch content..."
+          />
+        </div>
+
+        <div class="mb-4">
+          <label for="files" class="block text-sm font-medium text-gray-700"
+            >Upload Files (optional):</label
+          >
+          <input
+            type="file"
+            id="files"
+            name="files"
+            multiple
+            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+
+        <button
+          type="submit"
+          id="generateBtn"
+          class="w-full bg-blue-500 text-white p-3 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          Generate Script
+        </button>
+      </form>
+
+      <div
+        id="generatedScript"
+        class="mt-6 p-4 bg-gray-100 border border-gray-300 rounded-md hidden"
+      >
+        <h2 class="text-xl font-semibold">Generated Script:</h2>
+        <pre
+          id="scriptText"
+          class="text-sm text-gray-700 mt-2 whitespace-pre-wrap break-words"
+        ></pre>
+
+        <button
+          id="saveScriptBtn"
+          class="w-full bg-green-500 text-white p-3 rounded-md hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 mt-4 hidden"
+        >
+          Save Script
+        </button>
+
+        <div id="downloadButtons" class="mt-4 hidden">
+          <button
+            id="downloadTxtBtn"
+            class="w-full bg-yellow-500 text-white p-3 rounded-md hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          >
+            Download as .txt
+          </button>
+          <button
+            id="downloadPdfBtn"
+            class="w-full bg-purple-500 text-white p-3 rounded-md hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 mt-2"
+          >
+            Download as .pdf
+          </button>
+        </div>
+        <button
+          id="newScriptBtn"
+          class="w-full bg-gray-500 text-white p-3 rounded-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-500 mt-4"
+        >
+          Start New Script
+        </button>
+      </div>
+    </div>
+
+    <script>
+      document
+        .getElementById("scriptForm")
+        .addEventListener("submit", async function (event) {
+          event.preventDefault();
+          document.getElementById("prompt").disabled = true;
+          document.getElementById("external_link").disabled = true;
+          document.getElementById("files").disabled = true;
+          document.getElementById("generateBtn").disabled = true;
+          const formData = new FormData();
+          const prompt = document.getElementById("prompt").value;
+          const file = document.getElementById("files").files[0];
+          const external_link = document.getElementById("external_link").value;
+          formData.append("prompt", prompt);
+          formData.append("external_link", external_link);
+          if (file) formData.append("files", file);
+
+          if (!formData) {
+            alert("Please enter a prompt to generate the script.");
+            location.reload();
+          }
+          const csrfToken = document.querySelector(
+            "[name=csrfmiddlewaretoken]"
+          ).value;
+
+          const response = await fetch("/generate-script", {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": csrfToken,
+            },
+            body: formData,
+          });
+
+          const data = await response.json();
+
+          if (data.script) {
+            document
+              .getElementById("generatedScript")
+              .classList.remove("hidden");
+            document.getElementById("scriptText").textContent = data.script;
+
+            document.getElementById("saveScriptBtn").classList.remove("hidden");
+            document
+              .getElementById("downloadButtons")
+              .classList.remove("hidden");
+            document
+              .getElementById("saveScriptBtn")
+              .addEventListener("click", async function () {
+                const saveResponse = await fetch("/save-script", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken,
+                  },
+                  body: JSON.stringify({
+                    prompt: data.prompt,
+                    script: data.script,
+                  }),
+                });
+
+                const saveData = await saveResponse.json();
+                if (saveData.message) {
+                  alert(saveData.message);
+                } else {
+                  alert("Failed to save the script.");
+                }
+              });
+            document
+              .getElementById("downloadTxtBtn")
+              .addEventListener("click", async function () {
+                const txtResponse = await fetch(
+                  `/download-script/txt?script=${encodeURIComponent(
+                    data.script
+                  )}`,
+                  {
+                    method: "GET",
+                  }
+                );
+
+                const blob = await txtResponse.blob();
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "generated_script.txt";
+                link.click();
+              });
+            document
+              .getElementById("downloadPdfBtn")
+              .addEventListener("click", async function () {
+                const pdfResponse = await fetch(
+                  `/download-script/pdf?script=${encodeURIComponent(
+                    data.script
+                  )}`,
+                  {
+                    method: "GET",
+                  }
+                );
+
+                const blob = await pdfResponse.blob();
+                const link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
+                link.download = "generated_script.pdf";
+                link.click();
+              });
+          } else {
+            alert("Failed to generate the script.");
+          }
+        });
+
+      document
+        .getElementById("newScriptBtn")
+        .addEventListener("click", function () {
+          location.reload();
+        });
+    </script>
+  </body>
+</html>
